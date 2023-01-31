@@ -1,0 +1,271 @@
+\documentclass[12pt, a4paper, oneside]{ctexart}
+\usepackage{amsmath, amsthm, amssymb, graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{color}
+\usepackage{enumerate}
+\usepackage{epstopdf}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage[ruled,vlined]{algorithm2e}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=blue,      
+    urlcolor=blue,
+    citecolor=cyan,
+}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{ %
+    language=Python,                % the language of the code
+    basicstyle=\footnotesize,           % the size of the fonts that are used for the code
+    numbers=left,                   % where to put the line-numbers
+    %numberstyle=\tiny\color{gray},  % the style that is used for the line-numbers
+    %stepnumber=2,                   % the step between two line-numbers. If it's 1, each line 
+                            % will be numbered
+    %numbersep=5pt,                  % how far the line-numbers are from the code
+    %backgroundcolor=\color{blue},      % choose the background color. You must add \usepackage{color}
+    showspaces=false,               % show spaces adding particular underscores
+    %showstringspaces=false,         % underline spaces within strings
+    showtabs=false,                 % show tabs within strings adding particular underscores
+    frame=single,                   % adds a frame around the code
+    rulecolor=\color{black},        % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. commens (green here))
+    tabsize=2,                      % sets default tabsize to 2 spaces
+    captionpos=b,                   % sets the caption-position to bottom
+    breaklines=true,                % sets automatic line breaking
+    breakatwhitespace=false,        % sets if automatic breaks should only happen at whitespace
+    title=\lstname,                   % show the filename of files included with \lstinputlisting;
+                            % also try caption instead of title
+    keywordstyle=\color{blue},          % keyword style
+    commentstyle=\color{dkgreen},       % comment style
+    stringstyle=\color{mauve},         % string literal style
+    escapeinside={\%*}{*)},            % if you want to add LaTeX within your code
+    morekeywords={*,...}               % if you want to add more keywords to the set
+}
+\title{基于Wolfe-Powell准则的非精确一维步长搜索算法}
+\author{Xiaoma}
+\date{\today}
+\begin{document}
+\maketitle
+\section*{问题描述}
+给定目标函数$f(x)$:
+\begin{itemize}
+    \item 二维Rosenbrock函数：
+    $$f(x) = 100(x_{1}^{2}-x_{2})^{2}+(x_{1} - 1)^{2}$$
+    
+
+\end{itemize}
+求解无约束优化问题：
+$$\min_{x} f(x)$$
+
+\section*{实验原理}
+\subsection*{拟牛顿法}
+\subsubsection*{牛顿法}
+牛顿法的基本思想是利用目标函数的二次Taylor展开，并将其极小化。
+
+设$f(x)$是可微实函数，$x^{(k)} \in \mathbb{R}^{n}$，Hesse矩阵$\nabla^{2}f(x^{(k)})$正定，在$x^{(k)}$附近用二次
+Taylor展开近似$f$
+$$q^{(k)}(s) = f(x^{(k)}) + \nabla f(x^{(k)})^{T}s + \frac{1}{2} s^{T}\nabla^{2}f(x^{(k)})s$$
+其中$s=x-x^{(k)}$，$q^{(k)}(s)$为$f(x)$的二次近似，将上式右边极小化得
+$$x^{(k + 1)} = x^{(k)} - [\nabla^{2}f(x^{(k)})]^{-1}\nabla f(x^{(k)})$$
+在该公式中，步长因子$a_{k}=1$，令$G_{k} = \nabla^{2}f(x^{(k)}),g^{(k)} = \nabla f(x^{k})$，则原式可写为
+$$x^{(k + 1)} = x^{(k)} - G_{k}^{-1}g^{(k)}$$
+显然，牛顿法也可看成在椭球范数$\| \cdot \Vert_{G_{k}} $下的最速下降法，对于$f(x^{k} + s) \thickapprox  f(x^{(k)}) + g^{(k)\mathcal{T}}s$，$s^{(k)}$
+是极小化问题
+$$\min \frac{g^{(k)\mathcal{T}}}{\| s\Vert}$$
+的解，当采用$l_{2}$范数时
+$$s^{(k)} = -g^{(k)}$$
+所得方法是最速下降法，当采用椭球范数$\| \cdot \Vert_{G_{k}} $时
+$$s^{(k)} = -G_{k}^{-1}g^{(k)}$$
+所得方法是牛顿法。
+
+经典牛顿迭代法的运算步骤为
+\begin{algorithm*}
+    \caption{\text{牛顿法}}
+    \label{alg:algorithm}
+    \KwIn{\text{初始点$x_{0}$，阈值误差$\varepsilon $}}
+    \KwOut{\text{$x^{(k)},f(x^{(k)})$}}
+    \BlankLine
+    (1) 初始化k=0
+
+    (2) 计算 $g^{(k)} = \nabla f(x^{(k)})$，如果$\| g^{(k)}\Vert <\varepsilon $，则停止迭代
+
+    (3) 解线性方程组$s^{(k)} = -G_{k}^{-1}g^{(k)}$
+
+    (4) 更新$x^{(k+1)} = x^{(k)} + s^{(k)},k = k + 1$，返回步骤(2)
+\end{algorithm*}
+\subsubsection*{拟牛顿法}
+
+牛顿法虽然收敛速度较快，但计算Hense矩阵的成本过大，并且若矩阵不是正定的，则牛顿法失效。
+
+对$\nabla f(x)$在$x^{(k)}$出Taylor展开得到如下近似
+$$
+\nabla f(x) = g^{(k)} + H_{k}(x - x^{(k)})
+$$
+令$x = x^{(k+1)}$即可得到$g^{(k+1)} - g^{(k)}=H_{k}(x^{(k+1)}-x^{(k)})$\\
+记$y^{(k)}= g^{(k+1)} - g^{(k)}, \delta _{k} = x^{(k+1)} - x^{(k)}$
+$$
+y^{(k)} = H_{k} \delta_{k}
+$$
+称为拟牛顿条件
+
+\subsubsection*{DFP法}
+设对称秩二矫正为
+$$
+H_{k+1} = H_{k} + auu^{T} + bvv^{T}
+$$
+令拟牛顿条件满足，则
+$$
+H_{k}y^{(k)} + auu^{T}y^{(k)} + bvv^{T}y^{(k)} = s^{(k)}
+$$
+这里u和v并不唯一确定，但u和v的明显选择是
+$$
+u = s^{(k)} \quad v = H_{k}y^{(k)}
+$$
+确定出
+$$
+a = 1 / y^{(k)}u^{T} = 1/s^{(k)T}y^{(k)}\\
+b = -1v^{T}/y^{(k)} = - 1/y^{(k)T}H_{k}y^{(k)}
+$$
+因此
+$$
+H_{k+1} = H_{k} + \frac{s^{(k)}s^{(k)T}}{s^{(k)T}y^{(k)}} - \frac{H_{k}y^{(k)}y^{(k)T}H_{k}}{y^{(k)T}H_{k}y^{(k)}}
+$$
+这个公式称为DFP公式。
+DFP法的运算步骤为
+\begin{algorithm*}
+    \caption{\text{DFP}}
+    \label{alg:algorithm}
+    \KwIn{\text{初始点$x_{0}$，阈值误差$\varepsilon $}}
+    \KwOut{\text{$x^{(k)},f(x^{(k)})$}}
+    \BlankLine
+    (1) 初始化$H_{0} = I, k = 0$
+
+    (2) 计算搜索方向：$d^{(k)} = -H_{k} \nabla f(x^{(k)})$，如果$\| g^{(k)}\Vert < \varepsilon$，停止迭代
+
+    (3) 一维搜索确定步长$\alpha_{k}$，令$x^{(k+1)} = x^{(k)} + \alpha_{k}d^{(k)}$
+
+    (4) 令 $\mathbf{s}^{(k)}=\mathbf{x}^{(k+1)}-\mathbf{x}^{(k)}, \mathbf{y}^{(k)}=\nabla f\left(\mathbf{x}^{(k+1)}\right)-\nabla f\left(\mathbf{x}^{(k)}\right)$, 当 $\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}>0$ ,作更新 $H_{k+1}=H_k+\frac{\mathbf{s}^{(k)} \mathbf{s}^{(k)^T}}{\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}}-\frac{H_k \mathbf{y}^{(k)} \mathbf{y}^{(k){ }^T} H_k}{\mathbf{y}^{(k)^T} H_k \mathbf{y}^{(k)}}$ 。置 $k=k+1$, 返回步骤 $(2) 。$
+\end{algorithm*}
+
+\subsubsection*{BFGS}
+类似的，可以得到关于$B_{k}$的对称秩二矫正公式
+$$
+B_{k+1}^{(B F G S)}=B_k+\frac{\mathbf{y}^{(k)} \mathbf{y}^{(k)^T}}{\mathbf{y}^{(k)^T} \mathbf{s}^{(k)}}-\frac{B_k \mathbf{s}^{(k)} \mathbf{s}^{(k)^T} B_k}{\mathbf{s}^{(k)^T} B_k \mathbf{s}^{(k)}}
+$$
+$H_{k}$的BFGS校正公式为
+$$
+\begin{aligned}
+H_{k+1}^{(B F G S)}= & H_k+\left(1+\frac{\mathbf{y}^{(k)^T} H_k \mathbf{y}^{(k)}}{\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}}\right) \frac{\mathbf{s}^{(k)} \mathbf{s}^{(k)^T}}{\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}} \\
+& -\frac{H_k \mathbf{y}^{(k)} \mathbf{s}^{(k)^T}+\mathbf{s}^{(k)} \mathbf{y}^{(k)^T} H_k}{\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}} .
+\end{aligned}
+$$
+BFGS法的运算步骤为
+\begin{algorithm*}
+    \caption{\text{BFGS}}
+    \label{alg:algorithm}
+    \KwIn{\text{初始点$x_{0}$，阈值误差$\varepsilon $}}
+    \KwOut{\text{$x^{(k)},f(x^{(k)})$}}
+    \BlankLine
+    (1) 初始化$H_{0} = I, k = 0$
+
+    (2) 计算搜索方向：$d^{(k)} = -H_{k} \nabla f(x^{(k)})$，如果$\| g^{(k)}\Vert < \varepsilon$，停止迭代
+
+    (3) 一维搜索确定步长$\alpha_{k}$，令$x^{(k+1)} = x^{(k)} + \alpha_{k}d^{(k)}$
+
+    (4) 令 $\mathbf{s}^{(k)}=\mathbf{x}^{(k+1)}-\mathbf{x}^{(k)}, \mathbf{y}^{(k)}=\nabla f\left(\mathbf{x}^{(k+1)}\right)-\nabla f\left(\mathbf{x}^{(k)}\right)$ ,作更新 $H_{k+1}^{(B F G S)}=H_k+\left(1+\frac{\mathbf{y}^{(k)^T} H_k \mathbf{y}^{(k)}}{\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}}\right) \frac{\mathbf{s}^{(k)} \mathbf{s}^{(k)^T}}{\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}}-\frac{H_k \mathbf{y}^{(k)} \mathbf{s}^{(k)^T}+\mathbf{s}^{(k)} \mathbf{y}^{(k)^T} H_k}{\mathbf{s}^{(k)^T} \mathbf{y}^{(k)}}$ 。置 $k=k+1$, 返回步骤 $(2) 。$
+\end{algorithm*}
+\newpage
+\subsection*{非精确一维步长搜索}
+\subsubsection*{非精确一维搜索}
+
+找出满足某些适当条件的粗略近似解作为步长，提升算法的整体计算效率
+
+\textbf{Wolfe-Powell conditions :}
+$$
+\begin{gathered}
+\varphi(\alpha) \leq \varphi(0)+\rho \alpha \varphi^{\prime}(0) \\
+\varphi^{\prime}(\alpha) \geq \sigma \varphi^{\prime}(0)
+\end{gathered}
+$$
+其中$\rho \in (0, \frac{1}{2}), \sigma \in (\rho , 1)$是固定参数。
+
+设$\hat{\alpha}_{k}$是使得$f(x^{(k)} + \alpha d^{(k)}) = f(x^{(k)})$的最小正数$\alpha$
+
+\subsubsection*{基于Wolfe-Powell准则的非精确一维步长搜索}
+\begin{enumerate}[(1)]
+    \item 给定初始一维搜索区间 $[0, \bar{\alpha}]$, 以及 $\rho \in\left(0, \frac{1}{2}\right), \sigma \in(\rho, 1)$. 计算 $\varphi_0=\varphi(0)=f\left(x^{(k)}\right), \varphi_0^{\prime}=\varphi^{\prime}(0)=\nabla f\left(x^{(k)}\right)^T d^{(k)}$. 并令 $a_1=0, a_2=\bar{\alpha}, \varphi_1=\varphi_0, \varphi_1^{\prime}=\varphi_0^{\prime}$. 选取适当的 $\alpha \in\left(a_1, a_2\right)$.
+    \item 计算 $\varphi=\varphi(\alpha)=f\left(x^{(k)}+\alpha d^{(k)}\right)$. 若 $\varphi(\alpha) \leq \varphi(0)+\rho \alpha \varphi^{\prime}(0)$, 则转到 第 (3) 步。否则，由 $\varphi_1, \varphi_1^{\prime}, \varphi$ 构造二次插值多项式 $p^{(1)}(t)$, 并得其极小点 $\hat{\alpha}$. 令 $a_2=\alpha, \alpha=\hat{\alpha}$, 重复第 (2) 步.
+    \item 计算 $\varphi^{\prime}=\varphi^{\prime}(\alpha)=\nabla f\left(x^k+\alpha d^{(k)}\right)^T d^{(k)}$. 若 $\varphi^{\prime}(\alpha) \geq \sigma \varphi^{\prime}(0)$, 则输出 $\alpha_k=\alpha$, 并停止搜索. 否则由 $\varphi, \varphi^{\prime}, \varphi_1^{\prime}$ 构造两点二次插值多项式 $p^{(2)}(t)$ ， 并求得极小点 $\hat{\alpha}$. 令 $a_1=\alpha, \alpha=\hat{\alpha}$, 返回第 $(2)$ 步.
+\end{enumerate}
+
+\section*{数据说明}
+二维Rosenbrock函数
+\section*{程序输入输出说明}
+输入1、2选择DFP/BFGS，然后输入初始点。
+
+输出值为迭代次数与最优解
+
+\section*{程序测试结果}
+
+\begin{table}[H]
+    \begin{tabular}{llll}
+    \textbf{DFP} &
+      \textbf{epoch} &
+      \textbf{x1, x2} &
+      \textbf{f} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{0 0}} &
+      \multicolumn{1}{l|}{\textbf{17}} &
+      \multicolumn{1}{l|}{\textbf{0.9999999986994 0.9999999981660}} &
+      \multicolumn{1}{l|}{\textbf{6.055373455850762e-17}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{0.5 0.5}} &
+      \multicolumn{1}{l|}{\textbf{16}} &
+      \multicolumn{1}{l|}{\textbf{1.00000001203758 1.0000000247276}} &
+      \multicolumn{1}{l|}{\textbf{1.8747613102236447e-16}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{-1 1}} &
+      \multicolumn{1}{l|}{\textbf{1}} &
+      \multicolumn{1}{l|}{\textbf{1.0 1.0}} &
+      \multicolumn{1}{l|}{\textbf{0.0}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{2 -3}} &
+      \multicolumn{1}{l|}{\textbf{37}} &
+      \multicolumn{1}{l|}{\textbf{0.99999999503545 0.99999999346}} &
+      \multicolumn{1}{l|}{\textbf{1.176336523561564e-15}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{-100 150}} &
+      \multicolumn{1}{l|}{} &
+      \multicolumn{1}{l|}{\textbf{无法收敛}} &
+      \multicolumn{1}{l|}{} \\ \hline
+    \textbf{BFGS} &
+      \textbf{epoch} &
+      \textbf{x1, x2} &
+      \textbf{f} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{0 0}} &
+      \multicolumn{1}{l|}{\textbf{18}} &
+      \multicolumn{1}{l|}{\textbf{0.99999999786 0.99999999574}} &
+      \multicolumn{1}{l|}{\textbf{4.635405677357143e-18}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{0.5 0.5}} &
+      \multicolumn{1}{l|}{\textbf{15}} &
+      \multicolumn{1}{l|}{\textbf{0.9999999995 0.9999999990}} &
+      \multicolumn{1}{l|}{\textbf{2.4722121607796934e-19}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{-1 1}} &
+      \multicolumn{1}{l|}{\textbf{1}} &
+      \multicolumn{1}{l|}{\textbf{1.0 1.0}} &
+      \multicolumn{1}{l|}{\textbf{0.0}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{2 -3}} &
+      \multicolumn{1}{l|}{\textbf{26}} &
+      \multicolumn{1}{l|}{\textbf{1.00000002922187 1.000000058506}} &
+      \multicolumn{1}{l|}{\textbf{8.543076984615268e-16}} \\ \hline
+    \multicolumn{1}{|l|}{\textbf{-100 150}} &
+      \multicolumn{1}{l|}{\textbf{271}} &
+      \multicolumn{1}{l|}{\textbf{0.99999999993 0.9999999999}} &
+      \multicolumn{1}{l|}{\textbf{4.539167488746724e-19}} \\ \hline
+    \end{tabular}
+    \end{table}
+\section*{分析总结}
+不同的初始点也可能产生截然不同的结果，甚至无法收敛。
+
+经过测试发现， BFGS法具有比DFP法更稳定的数值。
+\end{document}
